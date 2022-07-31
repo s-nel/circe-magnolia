@@ -81,6 +81,34 @@ object AutoDerivedSuiteInputs extends AllSyntax {
     implicit val arbitraryRecursiveWithListExample: Arbitrary[RecursiveWithListExample] = Arbitrary(atDepth(0))
   }
 
+  case class RecursiveCycleAExample(b: Option[RecursiveCycleBExample])
+
+  object RecursiveCycleAExample {
+    implicit val eqRecursiveCycleAExample: Eq[RecursiveCycleAExample] = Eq.fromUniversalEquals
+
+    def atDepth(depth: Int): Gen[RecursiveCycleAExample] = if (depth < 3)
+      Gen.option(RecursiveCycleBExample.atDepth(depth + 1)).map(
+        RecursiveCycleAExample(_)
+      ) else Gen.const(RecursiveCycleAExample(None))
+
+    implicit val arbitraryRecursiveCycleAExample: Arbitrary[RecursiveCycleAExample] =
+      Arbitrary(atDepth(0))
+  }
+
+  case class RecursiveCycleBExample(a: Option[RecursiveCycleAExample])
+
+  object RecursiveCycleBExample {
+    implicit val eqRecursiveCycleBExample: Eq[RecursiveCycleBExample] = Eq.fromUniversalEquals
+
+    def atDepth(depth: Int): Gen[RecursiveCycleBExample] = if (depth < 3)
+      Gen.option(RecursiveCycleAExample.atDepth(depth + 1)).map(
+        RecursiveCycleBExample(_)
+      ) else Gen.const(RecursiveCycleBExample(None))
+
+    implicit val arbitraryRecursiveCycleBExample: Arbitrary[RecursiveCycleBExample] =
+      Arbitrary(atDepth(0))
+  }
+
   case class AnyInt(value: Int) extends AnyVal
 
   case class AnyValInside(v: AnyInt)

@@ -1,5 +1,6 @@
 package io.circe.magnolia
 
+import io.circe.magnolia.AutoDerivedSuiteInputs.{RecursiveCycleAExample, RecursiveCycleBExample}
 import io.circe.magnolia.derivation.decoder.semiauto._
 import io.circe.magnolia.derivation.encoder.semiauto._
 import io.circe.testing.CodecTests
@@ -33,6 +34,12 @@ class SemiautoDerivedSuite extends CirceSuite {
   implicit lazy val encodeRecursiveWithOptionExample: Encoder[RecursiveWithOptionExample] =
     deriveMagnoliaEncoder
 
+  implicit lazy val decodeRecursiveCycleAExample: Decoder[RecursiveCycleAExample] = deriveMagnoliaDecoder
+  implicit lazy val encodeRecursiveCycleAExample: Encoder[RecursiveCycleAExample] = deriveMagnoliaEncoder
+
+  implicit lazy val decodeRecursiveCycleBExample: Decoder[RecursiveCycleBExample] = deriveMagnoliaDecoder
+  implicit lazy val encodeRecursiveCycleBExample: Encoder[RecursiveCycleBExample] = deriveMagnoliaEncoder
+
   checkLaws("Codec[Tuple1[Int]]", CodecTests[Tuple1[Int]].unserializableCodec)
   checkLaws("Codec[(Int, Int, Foo)]", CodecTests[(Int, Int, Foo)].unserializableCodec)
   checkLaws("Codec[Box[Int]]", CodecTests[Box[Int]].unserializableCodec)
@@ -42,6 +49,8 @@ class SemiautoDerivedSuite extends CirceSuite {
   checkLaws("Codec[Foo]", CodecTests[Foo].unserializableCodec)
   checkLaws("Codec[RecursiveAdtExample]", CodecTests[RecursiveAdtExample].unserializableCodec)
   checkLaws("Codec[RecursiveWithOptionExample]", CodecTests[RecursiveWithOptionExample].unserializableCodec)
+  checkLaws("Codec[RecursiveCycleAExample]", CodecTests[RecursiveCycleAExample].unserializableCodec)
+  checkLaws("Codec[RecursiveCycleBExample]", CodecTests[RecursiveCycleBExample].unserializableCodec)
   checkLaws("Codec[AnyValInside]", CodecTests[AnyValInside].unserializableCodec)
 
   "A generically derived codec" should "not interfere with base instances" in forAll { (is: List[Int]) =>
