@@ -1,5 +1,6 @@
 package io.circe.magnolia.configured
 
+import cats.data.Validated.Invalid
 import io.circe.magnolia.DerivationError
 import io.circe._
 import io.circe.magnolia.configured.ConfiguredSemiautoDerivedSuite.{DefaultConfig, KebabCase, Lenient, SnakeCaseAndDiscriminator, Strict, WithDefaultValue}
@@ -192,15 +193,22 @@ class ConfiguredSemiautoDerivedSuite extends CirceSuite with Inside {
       {
         "NonProfit": {
           "orgName": "RSPCA",
-          "extraneous": true
+          "extraneous": true,
+          "extraneous2": false
         }
       }
     """)
-    inside(input.flatMap(i => Strict.decoder(i.hcursor))) {
-      case Left(e: DecodingFailure) => {
-        assert(e.message.contains("Unexpected field"))
-        assert(e.message.contains("extraneous"))
-        assert(e.message.contains("orgName"))
+    inside(input.map(i => Strict.decoder.decodeAccumulating(i.hcursor))) {
+      case Right(Invalid(nel)) => {
+        inside(nel.toList) {
+          case first :: second :: Nil =>
+            assert(first.getMessage.contains("Unexpected field"))
+            assert(first.getMessage.contains("extraneous"))
+            assert(first.getMessage.contains("orgName"))
+            assert(second.getMessage.contains("Unexpected field"))
+            assert(second.getMessage.contains("extraneous2"))
+            assert(second.getMessage.contains("orgName"))
+        }
       }
       case x => fail(x.toString)
     }
