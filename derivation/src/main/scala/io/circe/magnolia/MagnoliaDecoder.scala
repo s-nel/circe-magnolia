@@ -1,8 +1,9 @@
 package io.circe.magnolia
 
-import cats.data.{NonEmptyList, Validated}
+import cats.data.Validated
 import cats.data.Validated.{Invalid, Valid}
 import cats.syntax.either._
+import cats.syntax.list._
 import io.circe.{Decoder, DecodingFailure, HCursor}
 import io.circe.Decoder.{AccumulatingResult, Result}
 import io.circe.magnolia.configured.Configuration
@@ -45,18 +46,22 @@ private[magnolia] object MagnoliaDecoder {
             )
             val keyCursor = c.downField(key)
             keyCursor.focus match {
-              case Some(_) => p.typeclass.tryDecode(keyCursor)
+              case Some(_) => p.typeclass.tryDecodeAccumulating(keyCursor).toEither
               case None =>
                 p.default.fold {
                   // Some decoders (in particular, the default Option[T] decoder) do special things when a key is missing,
                   // so we give them a chance to do their thing here.
-                  p.typeclass.tryDecode(keyCursor)
+                  p.typeclass.tryDecodeAccumulating(keyCursor).toEither
                 }(x => Right(x))
             }
           } match {
             case Right(a) => Valid(a)
-            case Left(head :: tail) => Invalid(NonEmptyList(head, tail))
-            case Left(Nil) => throw new IllegalStateException("Decoding failed, but no errors returned. This is a bug")
+            case Left(head :: tail) =>
+              val errsNel = tail.foldLeft(head) {
+                case (acc, nel) => acc.concatNel(nel)
+              }
+              Invalid(errsNel)
+            case Left(Nil) => throw new IllegalStateException("Decoding failed, but empty error list. This is a bug")
           }
         }
       }
@@ -68,20 +73,26 @@ private[magnolia] object MagnoliaDecoder {
 
         override def decodeAccumulating(c: HCursor): AccumulatingResult[T] = {
           caseClass.constructEither { p =>
-            p.typeclass.tryDecode(
-              c.downField(
-                paramJsonKeyLookup.getOrElse(
-                  p.label,
-                  throw new IllegalStateException(
-                    "Looking up a parameter label should always yield a value. This is a bug"
+            p.typeclass
+              .tryDecodeAccumulating(
+                c.downField(
+                  paramJsonKeyLookup.getOrElse(
+                    p.label,
+                    throw new IllegalStateException(
+                      "Looking up a parameter label should always yield a value. This is a bug"
+                    )
                   )
                 )
               )
-            )
+              .toEither
           } match {
             case Right(a) => Valid(a)
-            case Left(head :: tail) => Invalid(NonEmptyList(head, tail))
-            case Left(Nil) => throw new IllegalStateException("Decoding failed, but no errors returned. This is a bug")
+            case Left(head :: tail) =>
+              val errsNel = tail.foldLeft(head) {
+                case (acc, nel) => acc.concatNel(nel)
+              }
+              Invalid(errsNel)
+            case Left(Nil) => throw new IllegalStateException("Decoding failed, but empty error list. This is a bug")
           }
         }
       }
@@ -89,18 +100,24 @@ private[magnolia] object MagnoliaDecoder {
 
     if (configuration.strictDecoding) {
       val expectedFields = paramJsonKeyLookup.values
-      nonStrictDecoder.validate { cursor: HCursor =>
-        val maybeUnexpectedErrors = for {
-          json <- cursor.focus
-          jsonKeys <- json.hcursor.keys
-          unexpected = jsonKeys.toSet -- expectedFields
-        } yield {
-          unexpected.toList map { unexpectedField =>
-            s"Unexpected field: [$unexpectedField]. Valid fields: ${expectedFields.mkString(",")}"
-          }
-        }
+      new Decoder[T] {
+        override def apply(c: HCursor): Result[T] = decodeAccumulating(c).toEither.leftMap(_.head)
 
-        maybeUnexpectedErrors.getOrElse(List("Couldn't determine decoded fields."))
+        override def decodeAccumulating(c: HCursor): AccumulatingResult[T] = {
+          val accResult = nonStrictDecoder.decodeAccumulating(c)
+          val maybeUnexpectedErrors = (for {
+            json <- c.focus
+            jsonKeys <- json.hcursor.keys
+            unexpected = jsonKeys.toSet -- expectedFields
+            decodingFailuresNel <- unexpected.toList.map { unexpectedField =>
+              DecodingFailure(s"Unexpected field: [$unexpectedField]. Valid fields: ${expectedFields.mkString(",")}", c.history)
+            }.toNel
+          } yield {
+            Invalid(decodingFailuresNel)
+          }).getOrElse(Valid(()))
+
+          maybeUnexpectedErrors.product(accResult).map(_._2)
+        }
       }
     } else {
       nonStrictDecoder
@@ -174,34 +191,7 @@ private[magnolia] object MagnoliaDecoder {
     val knownSubTypes = constructorLookup.keys.toSeq.sorted.mkString(",")
 
     override def apply(c: HCursor): Result[T] = {
-      c.downField(discriminator).as[String] match {
-        case Left(_) =>
-          Left(
-            DecodingFailure(
-              s"""
-             |Can't decode coproduct type: couldn't find discriminator or is not of type String.
-             |JSON: ${c.value}
-             |discriminator key: discriminator
-              """.stripMargin,
-              c.history
-            )
-          )
-        case Right(ctorName) =>
-          constructorLookup.get(ctorName) match {
-            case Some(subType) => subType.typeclass.apply(c)
-            case None =>
-              Left(
-                DecodingFailure(
-                  s"""
-               |Can't decode coproduct type: constructor name not found in known constructor names
-               |JSON: ${c.value}
-               |Allowed discriminators: $knownSubTypes
-              """.stripMargin,
-                  c.history
-                )
-              )
-          }
-      }
+      decodeAccumulating(c).toEither.leftMap(_.head)
     }
 
     override def decodeAccumulating(c: HCursor): AccumulatingResult[T] = {

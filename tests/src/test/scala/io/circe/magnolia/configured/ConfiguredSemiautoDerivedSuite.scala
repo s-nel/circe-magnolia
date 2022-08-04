@@ -192,7 +192,7 @@ class ConfiguredSemiautoDerivedSuite extends CirceSuite with Inside {
     val input = parse("""
       {
         "NonProfit": {
-          "orgName": "RSPCA",
+          "orgName": 9,
           "extraneous": true,
           "extraneous2": false
         }
@@ -201,13 +201,14 @@ class ConfiguredSemiautoDerivedSuite extends CirceSuite with Inside {
     inside(input.map(i => Strict.decoder.decodeAccumulating(i.hcursor))) {
       case Right(Invalid(nel)) => {
         inside(nel.toList) {
-          case first :: second :: Nil =>
+          case first :: second :: third :: Nil =>
             assert(first.getMessage.contains("Unexpected field"))
             assert(first.getMessage.contains("extraneous"))
             assert(first.getMessage.contains("orgName"))
             assert(second.getMessage.contains("Unexpected field"))
             assert(second.getMessage.contains("extraneous2"))
             assert(second.getMessage.contains("orgName"))
+            assert(third.getMessage.contains("orgName"))
         }
       }
       case x => fail(x.toString)
