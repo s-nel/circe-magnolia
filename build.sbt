@@ -7,7 +7,7 @@ lazy val buildSettings = Seq(
   crossScalaVersions := List("2.12.12", "2.13.4")
 )
 
-lazy val magnoliaVersion = "0.17.0"
+lazy val magnoliaVersion = "1.1.2"
 lazy val circeVersion = "0.13.0"
 lazy val circeGenericExtrasVersion = "0.13.0"
 lazy val shapelessVersion = "2.3.3"
@@ -77,7 +77,7 @@ lazy val allSettings = buildSettings ++ compilerSettings ++ publishSettings
 
 lazy val coreDependencies = libraryDependencies ++= Seq(
   "io.circe" %%% "circe-core" % circeVersion,
-  "com.propensive" %%% "magnolia" % magnoliaVersion,
+  "com.softwaremill.magnolia1_2" %%% "magnolia" % magnoliaVersion,
   "org.scala-lang" % "scala-reflect" % scalaVersion.value,
 )
 

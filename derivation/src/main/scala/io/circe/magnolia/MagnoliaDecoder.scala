@@ -7,11 +7,11 @@ import cats.syntax.list._
 import io.circe.{Decoder, DecodingFailure, HCursor}
 import io.circe.Decoder.{AccumulatingResult, Result}
 import io.circe.magnolia.configured.Configuration
-import magnolia._
+import magnolia1._
 
 private[magnolia] object MagnoliaDecoder {
 
-  private[magnolia] def combine[T](
+  private[magnolia] def join[T](
     caseClass: CaseClass[Decoder, T]
   )(implicit configuration: Configuration): Decoder[T] = {
     val paramJsonKeyLookup: Map[String, String] = caseClass.parameters.map { p =>
@@ -124,7 +124,7 @@ private[magnolia] object MagnoliaDecoder {
     }
   }
 
-  private[magnolia] def dispatch[T](
+  private[magnolia] def split[T](
     sealedTrait: SealedTrait[Decoder, T]
   )(implicit configuration: Configuration): Decoder[T] = {
     val constructorLookup: Map[String, Subtype[Decoder, T]] =
